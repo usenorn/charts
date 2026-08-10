@@ -1,0 +1,260 @@
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imagePullSecrets: []
+  commonLabels: {}
+
+images:
+  api:
+    repository: ghcr.io/usenorn/norn-api
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  web:
+    repository: ghcr.io/usenorn/norn-web
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+
+norn:
+  baseUrl: ""
+  existingSecret: ""
+  secretEnv: {}
+  configEnv:
+    NORN_APP_ENV: production
+    NORN_APP_LOG_LEVEL: info
+    NORN_INSTANCE_SELF_HOSTED: "true"
+    NORN_INSTANCE_SIGNUPS_OPEN: "true"
+    NORN_INSTANCE_PASSWORD_AUTH: "true"
+    NORN_PASSWORD_BREACH_CHECK_ENABLED: "true"
+  extraEnv: []
+  extraEnvFrom: []
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  host: norn.example.com
+  tls:
+    enabled: true
+    secretName: ""
+
+api:
+  replicaCount: 2
+  podAnnotations: {}
+  podLabels: {}
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 80
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+web:
+  replicaCount: 2
+  trustedProxy:
+    addressHeader: X-Forwarded-For
+    xffDepth: "1"
+  bodySizeLimit: 4M
+  nodeOptions: --max-old-space-size=384
+  podAnnotations: {}
+  podLabels: {}
+  service:
+    type: ClusterIP
+    port: 3000
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 80
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+worker:
+  podAnnotations: {}
+  podLabels: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+migration:
+  activeDeadlineSeconds: 900
+  backoffLimit: 2
+  waitImage:
+    repository: registry.k8s.io/kubectl
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 18.4-alpine
+    digest: ""
+    pullPolicy: IfNotPresent
+  auth:
+    username: norn
+    database: norn
+  external:
+    dsn: ""
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+valkey:
+  enabled: true
+  image:
+    repository: valkey/valkey
+    tag: 9.1.1-alpine
+    digest: ""
+    pullPolicy: IfNotPresent
+  external:
+    address: ""
+    username: ""
+    password: ""
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+garage:
+  enabled: true
+  image:
+    repository: dxflrs/garage
+    tag: v2.3.0
+    digest: ""
+    pullPolicy: IfNotPresent
+  bucket: norn
+  region: garage
+  publicHost: ""
+  publicEndpoint: ""
+  service:
+    type: ClusterIP
+    annotations: {}
+  external:
+    endpoint: ""
+    region: ""
+    bucket: ""
+    accessKeyId: ""
+    secretAccessKey: ""
+    usePathStyle: true
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+  cors:
+    enabled: true
+    image:
+      repository: amazon/aws-cli
+      tag: 2.31.23
+      digest: ""
+      pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+tests:
+  enabled: true
+  image:
+    repository: busybox
+    tag: 1.37.0
+    digest: ""
+    pullPolicy: IfNotPresent

@@ -1,0 +1,39 @@
+{{- include "norn.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "norn.fullname" . }}-env
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.norn.configEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  NORN_APP_BASE_URL: {{ include "norn.appURL" . | quote }}
+  NORN_HTTP_ADDR: "0.0.0.0:8080"
+  NORN_WORKER_HEALTH_ADDR: "0.0.0.0:8090"
+  {{- if hasPrefix "https://" (include "norn.appURL" .) }}
+  NORN_SESSION_SECURE: "true"
+  {{- end }}
+  {{- if .Values.valkey.enabled }}
+  NORN_VALKEY_ADDR: {{ printf "%s:6379" (include "norn.valkeyHost" .) | quote }}
+  NORN_ASYNQ_ADDR: {{ printf "%s:6379" (include "norn.valkeyHost" .) | quote }}
+  {{- else }}
+  NORN_VALKEY_ADDR: {{ .Values.valkey.external.address | quote }}
+  NORN_ASYNQ_ADDR: {{ .Values.valkey.external.address | quote }}
+  {{- with .Values.valkey.external.username }}
+  NORN_VALKEY_USERNAME: {{ . | quote }}
+  NORN_ASYNQ_USERNAME: {{ . | quote }}
+  {{- end }}
+  {{- end }}
+  NORN_STORAGE_BACKEND: "s3"
+  NORN_STORAGE_ENDPOINT: {{ include "norn.storageEndpoint" . | quote }}
+  {{- if .Values.garage.enabled }}
+  NORN_STORAGE_REGION: {{ .Values.garage.region | quote }}
+  NORN_STORAGE_BUCKET: {{ .Values.garage.bucket | quote }}
+  NORN_STORAGE_USE_PATH_STYLE: "true"
+  {{- else }}
+  NORN_STORAGE_REGION: {{ default "us-east-1" .Values.garage.external.region | quote }}
+  NORN_STORAGE_BUCKET: {{ .Values.garage.external.bucket | quote }}
+  NORN_STORAGE_USE_PATH_STYLE: {{ .Values.garage.external.usePathStyle | quote }}
+  {{- end }}

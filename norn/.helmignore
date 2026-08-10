@@ -1,0 +1,9 @@
+.DS_Store
+.git/
+.github/
+.idea/
+.vscode/
+*.secret.yaml
+secrets.yaml
+values.local.yaml
+values.private.yaml

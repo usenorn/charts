@@ -1,0 +1,39 @@
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "norn.fullname" . }}-test
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  {{- include "norn.imagePullSecrets" . | nindent 2 }}
+  containers:
+    - name: connectivity
+      image: {{ include "norn.image" (dict "root" . "image" .Values.tests.image) }}
+      imagePullPolicy: {{ .Values.tests.image.pullPolicy }}
+      command:
+        - /bin/sh
+        - -ec
+      args:
+        - >-
+          wget -qO- http://{{ include "norn.fullname" . }}-api:{{ .Values.api.service.port }}/v1/health >/dev/null &&
+          wget -qO- http://{{ include "norn.fullname" . }}-web:{{ .Values.web.service.port }}/robots.txt >/dev/null
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop:
+            - ALL
+{{- end }}

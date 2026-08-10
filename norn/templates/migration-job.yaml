@@ -1,0 +1,105 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "norn.migrationJobName" . }}
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+spec:
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "norn.componentSelectorLabels" (dict "root" . "component" "migration") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      serviceAccountName: {{ include "norn.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      {{- include "norn.imagePullSecrets" . | nindent 6 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      initContainers:
+        - name: wait-for-postgresql
+          image: {{ include "norn.image" (dict "root" . "image" .Values.postgresql.image) }}
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - until pg_isready -d "$NORN_POSTGRES_DSN"; do sleep 2; done
+          envFrom:
+            {{- include "norn.envFrom" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        - name: wait-for-valkey
+          image: {{ include "norn.image" (dict "root" . "image" .Values.valkey.image) }}
+          imagePullPolicy: {{ .Values.valkey.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - >-
+              host="${NORN_VALKEY_ADDR%:*}";
+              port="${NORN_VALKEY_ADDR##*:}";
+              user_args="";
+              if [ -n "${NORN_VALKEY_USERNAME:-}" ]; then user_args="--user $NORN_VALKEY_USERNAME"; fi;
+              until valkey-cli -h "$host" -p "$port" $user_args ping; do sleep 2; done
+          envFrom:
+            {{- include "norn.envFrom" . | nindent 12 }}
+          env:
+            - name: VALKEYCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "norn.secretName" . }}
+                  key: NORN_VALKEY_PASSWORD
+                  optional: true
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+        - name: migrate
+          image: {{ include "norn.image" (dict "root" . "image" .Values.images.api) }}
+          imagePullPolicy: {{ .Values.images.api.pullPolicy }}
+          args:
+            - migrate
+          envFrom:
+            {{- include "norn.envFrom" . | nindent 12 }}
+          {{- with .Values.norn.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+      containers:
+        - name: seed
+          image: {{ include "norn.image" (dict "root" . "image" .Values.images.api) }}
+          imagePullPolicy: {{ .Values.images.api.pullPolicy }}
+          args:
+            - seed
+          envFrom:
+            {{- include "norn.envFrom" . | nindent 12 }}
+          {{- with .Values.norn.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}

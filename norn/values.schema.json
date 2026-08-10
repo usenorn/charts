@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["global", "images", "norn", "ingress", "api", "web", "worker", "migration", "postgresql", "valkey", "garage", "serviceAccount", "tests"],
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "global": {
+      "type": "object",
+      "required": ["imagePullSecrets", "commonLabels"],
+      "properties": {
+        "imagePullSecrets": { "type": "array", "items": { "type": "object" } },
+        "commonLabels": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "images": {
+      "type": "object",
+      "required": ["api", "web"],
+      "properties": {
+        "api": { "$ref": "#/definitions/image" },
+        "web": { "$ref": "#/definitions/image" }
+      }
+    },
+    "norn": {
+      "type": "object",
+      "required": ["baseUrl", "existingSecret", "secretEnv", "configEnv", "extraEnv", "extraEnvFrom"],
+      "properties": {
+        "baseUrl": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "secretEnv": { "$ref": "#/definitions/environment" },
+        "configEnv": { "$ref": "#/definitions/environment" },
+        "extraEnv": { "type": "array", "items": { "type": "object" } },
+        "extraEnvFrom": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "required": ["enabled", "className", "annotations", "host", "tls"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "host": { "type": "string", "minLength": 1 },
+        "tls": {
+          "type": "object",
+          "required": ["enabled", "secretName"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "secretName": { "type": "string" }
+          }
+        }
+      }
+    },
+    "api": { "$ref": "#/definitions/applicationComponent" },
+    "web": {
+      "allOf": [
+        { "$ref": "#/definitions/applicationComponent" },
+        {
+          "type": "object",
+          "required": ["trustedProxy", "bodySizeLimit", "nodeOptions"],
+          "properties": {
+            "trustedProxy": {
+              "type": "object",
+              "required": ["addressHeader", "xffDepth"],
+              "properties": {
+                "addressHeader": { "type": "string" },
+                "xffDepth": { "type": "string", "pattern": "^[1-9][0-9]*$" }
+              }
+            },
+            "bodySizeLimit": { "type": "string", "minLength": 1 },
+            "nodeOptions": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "worker": { "$ref": "#/definitions/scheduledComponent" },
+    "migration": {
+      "type": "object",
+      "required": ["activeDeadlineSeconds", "backoffLimit", "waitImage", "resources"],
+      "properties": {
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 60 },
+        "backoffLimit": { "type": "integer", "minimum": 0 },
+        "waitImage": { "$ref": "#/definitions/image" },
+        "resources": { "type": "object" }
+      }
+    },
+    "postgresql": {
+      "type": "object",
+      "required": ["enabled", "image", "auth", "external", "persistence", "resources", "nodeSelector", "tolerations", "affinity"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/image" },
+        "auth": {
+          "type": "object",
+          "required": ["username", "database"],
+          "properties": {
+            "username": { "type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$" },
+            "database": { "type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$" }
+          }
+        },
+        "external": {
+          "type": "object",
+          "required": ["dsn"],
+          "properties": { "dsn": { "type": "string" } }
+        },
+        "persistence": { "$ref": "#/definitions/persistence" },
+        "resources": { "type": "object" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" }
+      }
+    },
+    "valkey": {
+      "type": "object",
+      "required": ["enabled", "image", "external", "persistence", "resources", "nodeSelector", "tolerations", "affinity"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/image" },
+        "external": {
+          "type": "object",
+          "required": ["address", "username", "password"],
+          "properties": {
+            "address": { "type": "string" },
+            "username": { "type": "string" },
+            "password": { "type": "string" }
+          }
+        },
+        "persistence": { "$ref": "#/definitions/persistence" },
+        "resources": { "type": "object" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" }
+      }
+    },
+    "garage": {
+      "type": "object",
+      "required": ["enabled", "image", "bucket", "region", "publicHost", "publicEndpoint", "service", "external", "persistence", "cors", "resources", "nodeSelector", "tolerations", "affinity"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/image" },
+        "bucket": { "type": "string", "minLength": 1 },
+        "region": { "type": "string", "minLength": 1 },
+        "publicHost": { "type": "string" },
+        "publicEndpoint": { "type": "string" },
+        "service": { "$ref": "#/definitions/service" },
+        "external": {
+          "type": "object",
+          "required": ["endpoint", "region", "bucket", "accessKeyId", "secretAccessKey", "usePathStyle"],
+          "properties": {
+            "endpoint": { "type": "string" },
+            "region": { "type": "string" },
+            "bucket": { "type": "string" },
+            "accessKeyId": { "type": "string" },
+            "secretAccessKey": { "type": "string" },
+            "usePathStyle": { "type": "boolean" }
+          }
+        },
+        "persistence": { "$ref": "#/definitions/persistence" },
+        "cors": {
+          "type": "object",
+          "required": ["enabled", "image"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "image": { "$ref": "#/definitions/image" }
+          }
+        },
+        "resources": { "type": "object" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "required": ["create", "name", "annotations"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "name": { "type": "string" },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "podSecurityContext": { "type": "object" },
+    "containerSecurityContext": { "type": "object" },
+    "tests": {
+      "type": "object",
+      "required": ["enabled", "image"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "$ref": "#/definitions/image" }
+      }
+    }
+  },
+  "definitions": {
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag", "digest", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^$|^sha256:[a-f0-9]{64}$" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "propertyNames": {
+        "allOf": [
+          { "pattern": "^NORN_[A-Z0-9_]+$" },
+          {
+            "not": {
+              "enum": [
+                "NORN_APP_BASE_URL",
+                "NORN_HTTP_ADDR",
+                "NORN_WORKER_HEALTH_ADDR",
+                "NORN_SESSION_SECURE",
+                "NORN_SECURITY_ENCRYPTION_KEY",
+                "NORN_POSTGRES_DSN",
+                "NORN_VALKEY_ADDR",
+                "NORN_VALKEY_USERNAME",
+                "NORN_VALKEY_PASSWORD",
+                "NORN_ASYNQ_ADDR",
+                "NORN_ASYNQ_USERNAME",
+                "NORN_ASYNQ_PASSWORD",
+                "NORN_STORAGE_BACKEND",
+                "NORN_STORAGE_ENDPOINT",
+                "NORN_STORAGE_REGION",
+                "NORN_STORAGE_BUCKET",
+                "NORN_STORAGE_USE_PATH_STYLE",
+                "NORN_STORAGE_ACCESS_KEY_ID",
+                "NORN_STORAGE_SECRET_ACCESS_KEY"
+              ]
+            }
+          }
+        ]
+      },
+      "additionalProperties": { "type": ["string", "number", "boolean"] }
+    },
+    "service": {
+      "type": "object",
+      "required": ["type", "annotations"],
+      "properties": {
+        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "autoscaling": {
+      "type": "object",
+      "required": ["enabled", "minReplicas", "maxReplicas", "targetCPUUtilizationPercentage"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 },
+        "targetCPUUtilizationPercentage": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "required": ["enabled", "maxUnavailable"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "maxUnavailable": { "type": ["integer", "string"] }
+      }
+    },
+    "applicationComponent": {
+      "type": "object",
+      "required": ["replicaCount", "podAnnotations", "podLabels", "service", "resources", "autoscaling", "pdb", "nodeSelector", "tolerations", "affinity", "topologySpreadConstraints"],
+      "properties": {
+        "replicaCount": { "type": "integer", "minimum": 1 },
+        "podAnnotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "podLabels": { "type": "object", "additionalProperties": { "type": "string" } },
+        "service": { "$ref": "#/definitions/service" },
+        "resources": { "type": "object" },
+        "autoscaling": { "$ref": "#/definitions/autoscaling" },
+        "pdb": { "$ref": "#/definitions/pdb" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" },
+        "topologySpreadConstraints": { "type": "array" }
+      }
+    },
+    "scheduledComponent": {
+      "type": "object",
+      "required": ["podAnnotations", "podLabels", "resources", "nodeSelector", "tolerations", "affinity", "topologySpreadConstraints"],
+      "properties": {
+        "podAnnotations": { "type": "object", "additionalProperties": { "type": "string" } },
+        "podLabels": { "type": "object", "additionalProperties": { "type": "string" } },
+        "resources": { "type": "object" },
+        "nodeSelector": { "type": "object" },
+        "tolerations": { "type": "array" },
+        "affinity": { "type": "object" },
+        "topologySpreadConstraints": { "type": "array" }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "required": ["enabled", "storageClass", "accessModes", "size"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "storageClass": { "type": "string" },
+        "accessModes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"] }
+        },
+        "size": { "type": "string", "pattern": "^[1-9][0-9]*(Ei|Pi|Ti|Gi|Mi|Ki)$" }
+      }
+    }
+  }
+}

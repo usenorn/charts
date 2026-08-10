@@ -1,0 +1,23 @@
+api:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+
+web:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+
+postgresql:
+  persistence:
+    enabled: false
+
+valkey:
+  persistence:
+    enabled: false
+
+garage:
+  persistence:
+    enabled: false

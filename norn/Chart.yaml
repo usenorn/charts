@@ -1,0 +1,15 @@
+apiVersion: v2
+name: norn
+description: Self-hosted task management system
+type: application
+version: 0.1.0
+appVersion: sha-61028e4
+kubeVersion: ">=1.34.0-0"
+home: https://github.com/usenorn/norn
+sources:
+  - https://github.com/usenorn/norn
+maintainers:
+  - name: Norn
+    url: https://github.com/usenorn
+annotations:
+  licenses: Apache-2.0

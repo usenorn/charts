@@ -1,0 +1,23 @@
+ingress:
+  enabled: false
+  tls:
+    enabled: false
+
+norn:
+  baseUrl: https://norn.example.net
+  existingSecret: norn-external
+
+postgresql:
+  enabled: false
+
+valkey:
+  enabled: false
+  external:
+    address: valkey.example.net:6379
+
+garage:
+  enabled: false
+  external:
+    endpoint: https://objects.example.net
+    region: eu-west-1
+    bucket: norn

@@ -1,0 +1,76 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "norn.fullname" . }}
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - secretName: {{ default (printf "%s-tls" (include "norn.fullname" .)) .Values.ingress.tls.secretName }}
+      hosts:
+        - {{ .Values.ingress.host | quote }}
+        {{- if .Values.garage.enabled }}
+        - {{ include "norn.storageHost" . | quote }}
+        {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "norn.fullname" . }}-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          - path: /mcp
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "norn.fullname" . }}-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          - path: /oauth
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "norn.fullname" . }}-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          - path: /.well-known
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "norn.fullname" . }}-api
+                port:
+                  number: {{ .Values.api.service.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "norn.fullname" . }}-web
+                port:
+                  number: {{ .Values.web.service.port }}
+    {{- if .Values.garage.enabled }}
+    - host: {{ include "norn.storageHost" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "norn.garageHost" . }}
+                port:
+                  number: 3900
+    {{- end }}
+{{- end }}

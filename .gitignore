@@ -1,0 +1,4 @@
+**/secrets.yaml
+**/*.secret.yaml
+**/values.local.yaml
+**/values.private.yaml

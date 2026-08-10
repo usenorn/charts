@@ -1,0 +1,45 @@
+name: chart
+
+on:
+  pull_request:
+    paths:
+      - norn/**
+      - .github/workflows/chart.yml
+  push:
+    branches: [main]
+    paths:
+      - norn/**
+      - .github/workflows/chart.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.1.0
+
+      - name: Lint
+        run: helm lint norn --strict
+
+      - name: Render supported configurations
+        run: |
+          helm template norn norn --namespace norn --kube-version 1.34.0 >/dev/null
+          helm template norn norn --namespace norn --kube-version 1.36.0 --values norn/ci/autoscaling-values.yaml >/dev/null
+          helm template norn norn --namespace norn --kube-version 1.36.0 --values norn/ci/external-values.yaml >/dev/null
+
+      - name: Reject incomplete external configuration
+        run: |
+          if helm template norn norn --set postgresql.enabled=false >/dev/null 2>&1; then
+            echo "chart accepted a disabled PostgreSQL service without an external DSN" >&2
+            exit 1
+          fi
+
+      - name: Package
+        run: helm package norn --destination /tmp

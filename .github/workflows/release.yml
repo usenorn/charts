@@ -1,0 +1,61 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  chart:
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v4.1.0
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tag="$RELEASE_TAG"
+          version="${tag#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "release tag must be vMAJOR.MINOR.PATCH with an optional prerelease suffix" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Validate and package
+        run: |
+          helm lint norn --strict
+          helm package norn \
+            --destination dist \
+            --version '${{ steps.version.outputs.version }}'
+
+      - name: Publish chart
+        env:
+          HELM_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$HELM_PASSWORD" | helm registry login "${{ env.REGISTRY }}" --username "${{ github.actor }}" --password-stdin
+          helm push dist/norn-${{ steps.version.outputs.version }}.tgz oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts
+
+      - name: Verify public chart access
+        run: |
+          helm registry logout "${{ env.REGISTRY }}"
+          if ! helm pull "oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/norn" --version '${{ steps.version.outputs.version }}' --destination /tmp; then
+            echo "anonymous chart pull failed" >&2
+            exit 1
+          fi

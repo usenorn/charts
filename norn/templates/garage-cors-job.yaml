@@ -1,0 +1,95 @@
+{{- if and .Values.garage.enabled .Values.garage.cors.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "norn.fullname" . }}-garage-cors
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: garage
+data:
+  cors.json: |
+    {
+      "CORSRules": [
+        {
+          "AllowedOrigins": [{{ include "norn.appURL" . | quote }}],
+          "AllowedMethods": ["PUT", "GET", "HEAD"],
+          "AllowedHeaders": ["content-type"],
+          "ExposeHeaders": ["ETag"],
+          "MaxAgeSeconds": 3000
+        }
+      ]
+    }
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-cors-%d" (include "norn.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+    app.kubernetes.io/component: garage-cors
+spec:
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "norn.componentSelectorLabels" (dict "root" . "component" "garage-cors") | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      {{- include "norn.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: configure
+          image: {{ include "norn.image" (dict "root" . "image" .Values.garage.cors.image) }}
+          imagePullPolicy: {{ .Values.garage.cors.image.pullPolicy }}
+          args:
+            - --endpoint-url
+            - {{ printf "http://%s:3900" (include "norn.garageHost" .) }}
+            - s3api
+            - put-bucket-cors
+            - --bucket
+            - {{ .Values.garage.bucket }}
+            - --cors-configuration
+            - file:///config/cors.json
+          env:
+            - name: HOME
+              value: /tmp
+            - name: AWS_DEFAULT_REGION
+              value: {{ .Values.garage.region | quote }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "norn.secretName" . }}
+                  key: GARAGE_DEFAULT_ACCESS_KEY
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "norn.secretName" . }}
+                  key: GARAGE_DEFAULT_SECRET_KEY
+          volumeMounts:
+            - name: cors
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+      volumes:
+        - name: cors
+          configMap:
+            name: {{ include "norn.fullname" . }}-garage-cors
+        - name: tmp
+          emptyDir: {}
+{{- end }}

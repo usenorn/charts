@@ -1,0 +1,9 @@
+Norn is available at {{ include "norn.appURL" . }}.
+
+{{- if and .Values.garage.enabled .Values.ingress.enabled }}
+Point {{ include "norn.storageHost" . }} at the same ingress as {{ .Values.ingress.host }}.
+{{- end }}
+
+{{- if not .Values.norn.existingSecret }}
+The generated Secret {{ include "norn.secretName" . }} is retained on uninstall. Keep it with the persistent volumes if you reinstall this release.
+{{- end }}

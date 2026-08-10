@@ -1,0 +1,30 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "norn.fullname" . }}-migration-reader
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "norn.fullname" . }}-migration-reader
+  labels:
+    {{- include "norn.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "norn.fullname" . }}-migration-reader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "norn.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
