@@ -25,6 +25,35 @@ jobs:
         with:
           version: v4.1.0
 
+      # appVersion is the default image tag: norn.image falls back to it whenever a user has
+      # not set images.<name>.tag or .digest. A tag nobody can pull is a chart that does not
+      # install, so both checks gate every change.
+      - name: appVersion is a release tag
+        run: |
+          set -euo pipefail
+          app_version=$(yq '.appVersion' norn/Chart.yaml)
+          if [[ ! "$app_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Chart.yaml appVersion must be a vMAJOR.MINOR.PATCH release tag; got '$app_version'" >&2
+            exit 1
+          fi
+
+      - name: appVersion images are pullable
+        run: |
+          set -euo pipefail
+          app_version=$(yq '.appVersion' norn/Chart.yaml)
+          for image in norn-api norn-web; do
+            token=$(curl -fsSL "https://ghcr.io/token?scope=repository:${{ github.repository_owner }}/${image}:pull&service=ghcr.io" \
+              | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer ${token}" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://ghcr.io/v2/${{ github.repository_owner }}/${image}/manifests/${app_version}")
+            if [ "$code" != "200" ]; then
+              echo "ghcr.io/${{ github.repository_owner }}/${image}:${app_version} is not anonymously pullable (HTTP $code)" >&2
+              exit 1
+            fi
+          done
+
       - name: Lint
         run: helm lint norn --strict
 
