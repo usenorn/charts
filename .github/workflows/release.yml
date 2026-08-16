@@ -31,9 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # main, not the tag: the resolved versions are committed back, and a release is always
+      # cut from its head. fetch-depth 0 so the rebase before pushing has history to work with.
       - uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
 
       - uses: azure/setup-helm@v4
         with:
