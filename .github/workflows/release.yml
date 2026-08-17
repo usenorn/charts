@@ -3,47 +3,114 @@ name: release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Chart version, for example 1.2.3
+        required: true
+        type: string
+      app_version:
+        description: Norn image tag to record as appVersion, for example v1.2.3
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  contents: write
   packages: write
+
+concurrency:
+  group: chart-release
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
   chart:
-    if: startsWith(github.event.release.tag_name, 'v')
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
+      # main, not the tag: the resolved versions are committed back, and a release is always
+      # cut from its head. fetch-depth 0 so the rebase before pushing has history to work with.
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - uses: azure/setup-helm@v4
         with:
           version: v4.1.0
 
-      - name: Resolve version
+      - name: Resolve versions
         id: version
         shell: bash
         env:
+          EVENT: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_APP_VERSION: ${{ inputs.app_version }}
         run: |
-          tag="$RELEASE_TAG"
-          version="${tag#v}"
+          set -euo pipefail
+          if [ "$EVENT" = "release" ]; then
+            version="${RELEASE_TAG#v}"
+            # A chart-only release does not move the application, so it keeps the appVersion
+            # already recorded.
+            app_version=$(yq '.appVersion' norn/Chart.yaml)
+          else
+            version="${INPUT_VERSION#v}"
+            app_version="$INPUT_APP_VERSION"
+          fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "release tag must be vMAJOR.MINOR.PATCH with an optional prerelease suffix" >&2
+            echo "chart version must be MAJOR.MINOR.PATCH with an optional prerelease suffix; got '$version'" >&2
             exit 1
           fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [[ ! "$app_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "appVersion must be vMAJOR.MINOR.PATCH with an optional prerelease suffix; got '$app_version'" >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse to overwrite a published version
+        run: |
+          if helm show chart "oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/norn" \
+               --version '${{ steps.version.outputs.version }}' >/dev/null 2>&1; then
+            echo "chart ${{ steps.version.outputs.version }} is already published" >&2
+            exit 1
+          fi
+
+      - name: The appVersion images are pullable
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+        run: |
+          set -euo pipefail
+          for image in norn-api norn-web; do
+            token=$(curl -fsSL "https://ghcr.io/token?scope=repository:${{ github.repository_owner }}/${image}:pull&service=ghcr.io" \
+              | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer ${token}" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+              "https://ghcr.io/v2/${{ github.repository_owner }}/${image}/manifests/${APP_VERSION}")
+            if [ "$code" != "200" ]; then
+              echo "ghcr.io/${{ github.repository_owner }}/${image}:${APP_VERSION} is not anonymously pullable (HTTP $code)" >&2
+              exit 1
+            fi
+          done
+
+      # Written before linting so the gate runs against exactly what ships, and so a checkout
+      # renders the same images the published chart does.
+      - name: Record the released versions
+        run: |
+          yq -i '.version = "${{ steps.version.outputs.version }}" | .appVersion = "${{ steps.version.outputs.app_version }}"' norn/Chart.yaml
 
       - name: Validate and package
         run: |
           helm lint norn --strict
           helm package norn \
             --destination dist \
-            --version '${{ steps.version.outputs.version }}'
+            --version '${{ steps.version.outputs.version }}' \
+            --app-version '${{ steps.version.outputs.app_version }}'
 
       - name: Publish chart
         env:
@@ -59,3 +126,14 @@ jobs:
             echo "anonymous chart pull failed" >&2
             exit 1
           fi
+
+      - name: Commit the recorded versions
+        run: |
+          set -euo pipefail
+          git config user.name 'Vlad Gorokhov'
+          git config user.email 'vlad.gorokh@gmail.com'
+          git add norn/Chart.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(chart): release ${{ steps.version.outputs.version }} on ${{ steps.version.outputs.app_version }}"
+          git pull --rebase origin main
+          git push origin HEAD:main
