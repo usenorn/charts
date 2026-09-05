@@ -2,8 +2,8 @@ apiVersion: v2
 name: norn
 description: Self-hosted task management system
 type: application
-version: 1.4.0
-appVersion: v1.4.0
+version: 1.5.0
+appVersion: v1.5.0
 kubeVersion: ">=1.34.0-0"
 home: https://github.com/usenorn/norn
 sources:
